@@ -1,4 +1,7 @@
-use std::net::TcpListener;
+use std::{
+    io::{prelude::*, BufReader},
+    net::{TcpListener, TcpStream},
+};
 
 fn main() {
     let listener = match TcpListener::bind("127.0.0.1:7878") {
@@ -10,8 +13,22 @@ fn main() {
     };
 
     for stream in listener.incoming() {
-        let _stream = stream.unwrap();
+        let stream = stream.unwrap();
 
-        println!("Connection established!");
+        handle_connection(stream);
     }
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&mut stream);
+    let http_request: Vec<_> = buf_reader
+        .lines()
+        .map(|result| match result {
+            Ok(result) => result,
+            Err(error) => format!("Error parsing result: {:?}", error),
+        })
+        .take_while(|line| !line.is_empty())
+        .collect();
+
+    println!("Request: {:#?}", http_request);
 }
