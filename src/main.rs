@@ -1,5 +1,4 @@
 use std::{
-    fs,
     io::{prelude::*, BufReader},
     net::{TcpListener, TcpStream},
 };
@@ -50,21 +49,7 @@ fn generate_response(http_request: &Vec<String>) -> HttpResponse {
         },
         Err(error) => HttpResponse {
             status: String::from("HTTP/1.1 500 Error"),
-            content: format!(
-                r#"<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title>Hello Rust Http Server!</title>
-  </head>
-  <body>
-    <h1>Oops!</h1>
-    <p>Something has gone wrong: {}</p>
-  </body>
-</html>
-"#,
-                error.msg
-            ),
+            content: format!("{:?}", error.msg),
         },
     }
 }
@@ -79,12 +64,7 @@ fn generate_content(http_request: &Vec<String>) -> Result<String, Error> {
         match parse_start_line(start_line) {
             Ok(start_line) => {
                 if start_line.target == "/" {
-                    match fs::read_to_string("html/hello.html") {
-                        Ok(contents) => Ok(contents),
-                        Err(error) => Err(Error {
-                            msg: error.to_string() + "\n",
-                        }),
-                    }
+                    Ok(String::from("Hi there! I'm server X\n"))
                 } else {
                     Err(Error {
                         msg: format!("invalid target: {}\n", start_line.target),
