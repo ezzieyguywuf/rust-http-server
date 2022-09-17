@@ -1,3 +1,4 @@
+use getopts::Options;
 use std::{
   env,
   io::{prelude::*, BufReader},
@@ -5,11 +6,16 @@ use std::{
 };
 
 fn main() {
-  for arg in env::args() {
-    println!("got arg: {arg}");
-  }
+  let ServerOptions { server_name, port } = match parse_options() {
+    Ok(opts) => opts,
+    Err(error) => {
+      println!("Error parsing flags: {:?}", error.msg);
+      return;
+    }
+  };
 
-  let listener = match TcpListener::bind("127.0.0.1:7878") {
+  println!("Server name: {server_name}");
+  let listener = match TcpListener::bind(format!("127.0.0.1:{}", port)) {
     Ok(listener) => listener,
     Err(error) => {
       println!("Error connecting: {:?}", error);
@@ -20,11 +26,46 @@ fn main() {
   for stream in listener.incoming() {
     let stream = stream.unwrap();
 
-    handle_connection(stream);
+    handle_connection(stream, &server_name);
   }
 }
 
-fn handle_connection(mut stream: TcpStream) {
+struct ServerOptions {
+  server_name: String,
+  port: String,
+}
+
+fn parse_options() -> Result<ServerOptions, Error> {
+  let args: Vec<String> = env::args().collect();
+  let mut opts = Options::new();
+  opts.reqopt("n", "name", "The server's name", "SERVER_NAME");
+  opts.reqopt("p", "port", "The port on which to listen", "PORT");
+
+  let matches = match opts.parse(&args[1..]) {
+    Ok(m) => m,
+    Err(f) => return Err(Error { msg: f.to_string() }),
+  };
+  let server_name = match matches.opt_str("n") {
+    Some(val) => val,
+    None => {
+      return Err(Error {
+        msg: String::from("Error parsing SERVER_NAME flag"),
+      })
+    }
+  };
+  let port = match matches.opt_str("p") {
+    Some(val) => val,
+    None => {
+      return Err(Error {
+        msg: String::from("Error parsing PORT flag"),
+      })
+    }
+  };
+
+  Ok(ServerOptions { server_name, port })
+}
+
+fn handle_connection(mut stream: TcpStream, server_name: &str) {
   let buf_reader = BufReader::new(&mut stream);
   let http_request: Vec<_> = buf_reader
     .lines()
@@ -34,7 +75,7 @@ fn handle_connection(mut stream: TcpStream) {
 
   println!("Request: {:#?}", http_request);
 
-  let HttpResponse { status, content } = generate_response(&http_request);
+  let HttpResponse { status, content } = generate_response(&http_request, server_name);
   let length = content.len();
 
   let response = format!("{status}\r\nContent-Length: {length}\r\n\r\n{content}");
@@ -46,8 +87,8 @@ fn handle_connection(mut stream: TcpStream) {
     });
 }
 
-fn generate_response(http_request: &Vec<String>) -> HttpResponse {
-  match generate_content(http_request) {
+fn generate_response(http_request: &Vec<String>, server_name: &str) -> HttpResponse {
+  match generate_content(http_request, server_name) {
     Ok(content) => HttpResponse {
       status: String::from("HTTP/1.1 200 OK"),
       content,
@@ -59,7 +100,7 @@ fn generate_response(http_request: &Vec<String>) -> HttpResponse {
   }
 }
 
-fn generate_content(http_request: &Vec<String>) -> Result<String, Error> {
+fn generate_content(http_request: &Vec<String>, server_name: &str) -> Result<String, Error> {
   if http_request.is_empty() {
     Err(Error {
       msg: String::from("Empty request, don't know what to do\n"),
@@ -69,7 +110,10 @@ fn generate_content(http_request: &Vec<String>) -> Result<String, Error> {
     match parse_start_line(start_line) {
       Ok(start_line) => {
         if start_line.target == "/" {
-          Ok(String::from("Hi there! I'm server X\n"))
+          Ok(format!(
+            "Hi there! I'm a server. My name is: {}\n",
+            server_name
+          ))
         } else {
           Err(Error {
             msg: format!("invalid target: {}\n", start_line.target),
