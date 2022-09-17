@@ -30,11 +30,10 @@ fn handle_connection(mut stream: TcpStream) {
 
     println!("Request: {:#?}", http_request);
 
-    let status_line = "HTTP/1.1 200 OK";
-    let contents = generate_content(&http_request);
-    let length = contents.len();
+    let HttpResponse { status, content } = generate_response(&http_request);
+    let length = content.len();
 
-    let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
+    let response = format!("{status}\r\nContent-Length: {length}\r\n\r\n{content}");
 
     stream
         .write_all(response.as_bytes())
@@ -43,23 +42,56 @@ fn handle_connection(mut stream: TcpStream) {
         });
 }
 
-fn generate_content(http_request: &Vec<String>) -> String {
+fn generate_response(http_request: &Vec<String>) -> HttpResponse {
+    match generate_content(http_request) {
+        Ok(content) => HttpResponse {
+            status: String::from("HTTP/1.1 200 OK"),
+            content,
+        },
+        Err(error) => HttpResponse {
+            status: String::from("HTTP/1.1 500 Error"),
+            content: format!(
+                r#"<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Hello Rust Http Server!</title>
+  </head>
+  <body>
+    <h1>Oops!</h1>
+    <p>Something has gone wrong: {}</p>
+  </body>
+</html>
+"#,
+                error.msg
+            ),
+        },
+    }
+}
+
+fn generate_content(http_request: &Vec<String>) -> Result<String, Error> {
     if http_request.is_empty() {
-        String::from("Empty request, don't know what to do\n")
+        Err(Error {
+            msg: String::from("Empty request, don't know what to do\n"),
+        })
     } else {
         let start_line = &http_request[0];
         match parse_start_line(start_line) {
             Ok(start_line) => {
                 if start_line.target == "/" {
                     match fs::read_to_string("html/hello.html") {
-                        Ok(contents) => contents,
-                        Err(error) => error.to_string() + "\n",
+                        Ok(contents) => Ok(contents),
+                        Err(error) => Err(Error {
+                            msg: error.to_string() + "\n",
+                        }),
                     }
                 } else {
-                    format!("invalid target: {}\n", start_line.target)
+                    Err(Error {
+                        msg: format!("invalid target: {}\n", start_line.target),
+                    })
                 }
             }
-            Err(error) => error.msg,
+            Err(error) => Err(error),
         }
     }
 }
@@ -86,6 +118,11 @@ fn parse_start_line(line: &str) -> Result<HttpStartLine, Error> {
 #[derive(Debug)]
 struct Error {
     msg: String,
+}
+
+struct HttpResponse {
+    status: String,
+    content: String,
 }
 
 struct HttpStartLine {
