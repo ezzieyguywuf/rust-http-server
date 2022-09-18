@@ -92,7 +92,12 @@ fn handle_connection(mut stream: TcpStream, server_name: &str) {
     .take_while(|line| !line.is_empty())
     .collect();
 
-  println!("Request: {:#?}", http_request);
+  if !http_request
+    .iter()
+    .any(|line| line.contains("User-Agent: GoogleHC"))
+  {
+    println!("Request: {:#?}", http_request);
+  }
 
   let HttpResponse { status, content } = generate_response(&http_request, server_name);
   let length = content.len();
