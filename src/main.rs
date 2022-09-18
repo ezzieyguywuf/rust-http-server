@@ -6,7 +6,11 @@ use std::{
 };
 
 fn main() {
-  let ServerOptions { server_name, port } = match parse_options() {
+  let ServerOptions {
+    server_name,
+    address,
+    port,
+  } = match parse_options() {
     Ok(opts) => opts,
     Err(error) => {
       println!("Error parsing flags: {:?}", error.msg);
@@ -15,7 +19,7 @@ fn main() {
   };
 
   println!("Server name: {server_name}");
-  let listener = match TcpListener::bind(format!("127.0.0.1:{}", port)) {
+  let listener = match TcpListener::bind(format!("{address}:{port}")) {
     Ok(listener) => listener,
     Err(error) => {
       println!("Error connecting: {:?}", error);
@@ -32,6 +36,7 @@ fn main() {
 
 struct ServerOptions {
   server_name: String,
+  address: String,
   port: String,
 }
 
@@ -40,10 +45,20 @@ fn parse_options() -> Result<ServerOptions, Error> {
   let mut opts = Options::new();
   opts.reqopt("n", "name", "The server's name", "SERVER_NAME");
   opts.reqopt("p", "port", "The port on which to listen", "PORT");
+  opts.optopt(
+    "a",
+    "address",
+    "The address to liste to (default 127.0.0.1)",
+    "ADDRESS",
+  );
 
   let matches = match opts.parse(&args[1..]) {
     Ok(m) => m,
     Err(f) => return Err(Error { msg: f.to_string() }),
+  };
+  let address = match matches.opt_str("a") {
+    Some(val) => val,
+    None => String::from("127.0.0.1"),
   };
   let server_name = match matches.opt_str("n") {
     Some(val) => val,
@@ -62,7 +77,11 @@ fn parse_options() -> Result<ServerOptions, Error> {
     }
   };
 
-  Ok(ServerOptions { server_name, port })
+  Ok(ServerOptions {
+    server_name,
+    address,
+    port,
+  })
 }
 
 fn handle_connection(mut stream: TcpStream, server_name: &str) {
