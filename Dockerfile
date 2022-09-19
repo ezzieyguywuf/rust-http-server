@@ -14,4 +14,6 @@ RUN cargo install --path .
 ENV PORT 7878
 
 # Run the web service on container startup.
-CMD rust-http-server --port ${PORT} --address "0.0.0.0" --name "$(hostname)"
+CMD rust-http-server \
+  --port ${PORT} --address "0.0.0.0" \
+  --name "serverless-uid: $(curl http://metadata.google.internal/computeMetadata/v1/instance/id -H \"Metadata-Flavor: Google\")"
