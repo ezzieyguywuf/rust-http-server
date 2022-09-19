@@ -1,3 +1,4 @@
+use chrono::prelude::*;
 use getopts::Options;
 use std::{
   env,
@@ -109,6 +110,12 @@ fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> b
 
   if !http_request.is_empty() && !http_request.iter().any(|line| is_google_health_check(line)) {
     println!("-- BEGIN SERVER MESSAGE --");
+    println!(
+      "{:?}",
+      Local::now()
+        .format("%B %d, %Y at %H:%M:%S UTC%z")
+        .to_string()
+    );
     println!("Request: {:#?}", http_request);
     if !should_serve {
       println!("NOT SENDING RESPONSE: call /on to turn server back on");
