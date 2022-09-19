@@ -109,18 +109,17 @@ fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> b
   }
 
   if !http_request.is_empty() && !http_request.iter().any(|line| is_google_health_check(line)) {
-    println!("-- BEGIN SERVER MESSAGE --");
     println!(
-      "{:?}",
-      Local::now()
-        .format("%B %d, %Y at %H:%M:%S%.f UTC%z")
-        .to_string()
+      "Request received at {}\n{}",
+      Local::now().format("%B %d, %Y at %H:%M:%S%.f UTC%z"),
+      http_request
+        .iter()
+        .map(|line| String::from("  ") + line)
+        .collect::<Vec<String>>()
+        .join("\n")
     );
-    println!("Request: {:#?}", http_request);
-    if !should_serve {
-      println!("NOT SENDING RESPONSE: call /on to turn server back on");
-    }
-    println!("-- END SERVER MESSAGE --\n");
+
+    println!("Response sent:\n  {status}\n  Content-Length: {length}\n  {content}");
   }
 
   should_serve
