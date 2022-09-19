@@ -7,4 +7,3 @@ edition = "2021"
 
 [dependencies]
 getopts = "0.2"
-http = "0.2.8"
