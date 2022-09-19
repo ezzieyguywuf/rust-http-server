@@ -27,10 +27,12 @@ fn main() {
     }
   };
 
+  let mut serve: bool = true;
   for stream in listener.incoming() {
     let stream = stream.unwrap();
 
-    handle_connection(stream, &server_name);
+    serve = handle_connection(stream, &server_name, serve);
+    println!("Got serve = {}", serve);
   }
 }
 
@@ -84,7 +86,7 @@ fn parse_options() -> Result<ServerOptions, Error> {
   })
 }
 
-fn handle_connection(mut stream: TcpStream, server_name: &str) {
+fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> bool {
   let buf_reader = BufReader::new(&mut stream);
   let http_request: Vec<_> = buf_reader
     .lines()
@@ -92,59 +94,103 @@ fn handle_connection(mut stream: TcpStream, server_name: &str) {
     .take_while(|line| !line.is_empty())
     .collect();
 
-  if !http_request
-    .iter()
-    .any(|line| line.contains("User-Agent: GoogleHC"))
+  if !http_request.is_empty()
+    && !http_request
+      .iter()
+      .any(|line| line.contains("User-Agent: GoogleHC"))
   {
     println!("Request: {:#?}", http_request);
   }
 
-  let HttpResponse { status, content } = generate_response(&http_request, server_name);
+  let (HttpResponse { status, content }, should_serve) =
+    generate_response(&http_request, server_name, serve);
   let length = content.len();
 
   let response = format!("{status}\r\nContent-Length: {length}\r\n\r\n{content}");
 
-  stream
-    .write_all(response.as_bytes())
-    .unwrap_or_else(|error| {
-      println!("Error writing response: {:?}", error);
-    });
+  if should_serve {
+    stream
+      .write_all(response.as_bytes())
+      .unwrap_or_else(|error| {
+        println!("Error writing response: {:?}", error);
+      });
+  }
+
+  should_serve
 }
 
-fn generate_response(http_request: &Vec<String>, server_name: &str) -> HttpResponse {
-  match generate_content(http_request, server_name) {
-    Ok(content) => HttpResponse {
-      status: String::from("HTTP/1.1 200 OK"),
-      content,
-    },
-    Err(error) => HttpResponse {
-      status: String::from("HTTP/1.1 500 Error"),
-      content: error.msg,
-    },
+fn generate_response(
+  http_request: &Vec<String>,
+  server_name: &str,
+  serve: bool,
+) -> (HttpResponse, bool) {
+  match generate_content(http_request, server_name, serve) {
+    (Ok(content), should_serve) => (
+      HttpResponse {
+        status: String::from("HTTP/1.1 200 OK"),
+        content,
+      },
+      should_serve,
+    ),
+    (Err(error), should_serve) => (
+      HttpResponse {
+        status: String::from("HTTP/1.1 500 Error"),
+        content: error.msg,
+      },
+      should_serve,
+    ),
   }
 }
 
-fn generate_content(http_request: &Vec<String>, server_name: &str) -> Result<String, Error> {
+fn generate_content(
+  http_request: &Vec<String>,
+  server_name: &str,
+  serve: bool,
+) -> (Result<String, Error>, bool) {
   if http_request.is_empty() {
-    Err(Error {
-      msg: String::from("Empty request, don't know what to do\n"),
-    })
+    (
+      Err(Error {
+        msg: String::from("Empty request, don't know what to do\n"),
+      }),
+      serve,
+    )
   } else {
     let start_line = &http_request[0];
     match parse_start_line(start_line) {
       Ok(start_line) => {
         if start_line.target == "/" {
-          Ok(format!(
-            "Hi there! I'm a server. My name is: {}\n",
-            server_name
-          ))
+          (
+            Ok(format!(
+              "Hi there! I'm a server. My name is: {}\n",
+              server_name
+            )),
+            serve,
+          )
+        } else if start_line.target == "/on" {
+          (
+            Ok(format!(
+              "Server spinning back up, beep-boop. Hi! My name is: {}\n",
+              server_name
+            )),
+            true,
+          )
+        } else if start_line.target == "/off" {
+          (
+            Ok(String::from(
+              "Server shutting down, BEEEeeep... spin back up with /on\n",
+            )),
+            false,
+          )
         } else {
-          Err(Error {
-            msg: format!("invalid target: {}\n", start_line.target),
-          })
+          (
+            Err(Error {
+              msg: format!("invalid target: {}\n", start_line.target),
+            }),
+            serve,
+          )
         }
       }
-      Err(error) => Err(error),
+      Err(error) => (Err(error), serve),
     }
   }
 }
