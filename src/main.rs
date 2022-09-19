@@ -93,11 +93,7 @@ fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> b
     .take_while(|line| !line.is_empty())
     .collect();
 
-  if !http_request.is_empty()
-    && !http_request
-      .iter()
-      .any(|line| line.contains("User-Agent: GoogleHC"))
-  {
+  if !http_request.is_empty() && !http_request.iter().any(|line| is_google_health_check(line)) {
     println!("Request: {:#?}", http_request);
   }
 
@@ -116,6 +112,11 @@ fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> b
   }
 
   should_serve
+}
+
+fn is_google_health_check(data: &str) -> bool {
+  let lower = data.to_lowercase();
+  lower.starts_with("user-agent:") && (lower.contains("googlehc") || lower.contains("uptimechecks"))
 }
 
 fn generate_response(
