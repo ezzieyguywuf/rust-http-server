@@ -119,7 +119,7 @@ fn generate_response(http_request: &Vec<String>, server_name: &str) -> HttpRespo
     },
     Err(error) => HttpResponse {
       status: String::from("HTTP/1.1 500 Error"),
-      content: format!("{:?}", error.msg),
+      content: error.msg,
     },
   }
 }
