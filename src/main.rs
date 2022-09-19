@@ -113,7 +113,7 @@ fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> b
     println!(
       "{:?}",
       Local::now()
-        .format("%B %d, %Y at %H:%M:%S UTC%z")
+        .format("%B %d, %Y at %H:%M:%S%.f UTC%z")
         .to_string()
     );
     println!("Request: {:#?}", http_request);
