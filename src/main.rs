@@ -93,10 +93,6 @@ fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> b
     .take_while(|line| !line.is_empty())
     .collect();
 
-  if !http_request.is_empty() && !http_request.iter().any(|line| is_google_health_check(line)) {
-    println!("Request: {:#?}", http_request);
-  }
-
   let (HttpResponse { status, content }, should_serve) =
     generate_response(&http_request, server_name, serve);
   let length = content.len();
@@ -109,6 +105,15 @@ fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> b
       .unwrap_or_else(|error| {
         println!("Error writing response: {:?}", error);
       });
+  }
+
+  if !http_request.is_empty() && !http_request.iter().any(|line| is_google_health_check(line)) {
+    println!("-- BEGIN SERVER MESSAGE --");
+    println!("Request: {:#?}", http_request);
+    if !should_serve {
+      println!("NOT SENDING RESPONSE: call /on to turn server back on");
+    }
+    println!("-- END SERVER MESSAGE --\n");
   }
 
   should_serve
