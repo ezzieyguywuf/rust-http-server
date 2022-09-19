@@ -32,7 +32,6 @@ fn main() {
     let stream = stream.unwrap();
 
     serve = handle_connection(stream, &server_name, serve);
-    println!("Got serve = {}", serve);
   }
 }
 
