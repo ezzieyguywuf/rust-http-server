@@ -88,19 +88,24 @@ fn parse_options() -> Result<ServerOptions, Error> {
 
 fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> bool {
   let buf_reader = BufReader::new(&mut stream);
-  let http_request: Vec<_> = buf_reader
+  let http_request: Vec<String> = buf_reader
     .lines()
     .map(|result| result.unwrap_or_else(|error| format!("Error parsing result: {:?}", error)))
     .take_while(|line| !line.is_empty())
     .collect();
 
-  let (HttpResponse { status, content }, should_serve) =
+  let (HttpResponse { status, content }, should_serve_uptime_check) =
     generate_response(&http_request, server_name, serve);
   let length = content.len();
 
   let response = format!("{status}\r\nContent-Length: {length}\r\n\r\n{content}");
 
-  if should_serve {
+  let serve_request = match categorize_request(&http_request) {
+    RequestType::UptimeCheck => should_serve_uptime_check,
+    _ => true,
+  };
+
+  if serve_request {
     stream
       .write_all(response.as_bytes())
       .unwrap_or_else(|error| {
@@ -108,7 +113,11 @@ fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> b
       });
   }
 
-  if !http_request.is_empty() && !http_request.iter().any(|line| is_google_health_check(line)) {
+  if !http_request.is_empty()
+    && !http_request
+      .iter()
+      .any(|line| is_google_health_check(line) || is_google_uptime_check(line))
+  {
     println!(
       "Request received at {}\n{}",
       Local::now().format("%B %d, %Y at %H:%M:%S%.f UTC%z"),
@@ -122,12 +131,36 @@ fn handle_connection(mut stream: TcpStream, server_name: &str, serve: bool) -> b
     println!("Response sent:\n  {status}\n  Content-Length: {length}\n  {content}");
   }
 
-  should_serve
+  should_serve_uptime_check
+}
+
+enum RequestType {
+  Unknown,
+  HealthCheck,
+  UptimeCheck,
+}
+
+fn categorize_request(http_request: &[String]) -> RequestType {
+  for i in http_request {
+    if is_google_health_check(i) {
+      return RequestType::HealthCheck;
+    }
+    if is_google_uptime_check(i) {
+      return RequestType::UptimeCheck;
+    }
+  }
+
+  return RequestType::Unknown;
 }
 
 fn is_google_health_check(data: &str) -> bool {
   let lower = data.to_lowercase();
-  lower.starts_with("user-agent:") && (lower.contains("googlehc") || lower.contains("uptimechecks"))
+  lower.starts_with("user-agent:") && lower.contains("googlehc")
+}
+
+fn is_google_uptime_check(data: &str) -> bool {
+  let lower = data.to_lowercase();
+  lower.starts_with("user-agent:") && lower.contains("uptimechecks")
 }
 
 fn generate_response(
