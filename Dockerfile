@@ -7,7 +7,12 @@ WORKDIR /usr/src/app
 COPY . .
 
 # Install production dependencies and build a release artifact.
-RUN apt-get update && apt-get  install -y cargo && cargo install --path .
+RUN apt-get update && \
+  apt-get  install -y cargo git build-essential libaio-dev && \
+  cargo install --path . && \
+  cd /root && git clone  https://github.com/axboe/fio.git && \
+  cd fio && ./configure && \
+  make -j $(nproc) install
 
 # Service must listen to $PORT environment variable.
 # This default value facilitates local development.
